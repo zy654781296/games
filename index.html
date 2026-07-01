@@ -168,7 +168,7 @@
   <span class="rocket">🚀</span>
   <div class="title">单词星球<br>大冒险</div>
   <div class="subtitle">和小火箭一起征服英文单词吧！</div>
-  <button class="btn btn-primary" onclick="showScreen('level-screen')">开始冒险</button>
+  <button class="btn btn-primary" onclick="ensureAudio();initVoices();showScreen('level-screen')">开始冒险</button>
 </div>
 
 <!-- Level Selection Screen -->
@@ -355,7 +355,14 @@ function saveProgress() {
 // ===== AUDIO ENGINE =====
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx;
-function ensureAudio() { if (!audioCtx) audioCtx = new AudioCtx(); }
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new AudioCtx();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+// Mobile: resume AudioContext on any user gesture
+['click','touchstart','touchend'].forEach(evt => {
+  document.addEventListener(evt, () => { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); }, { passive: true });
+});
 
 function playTone(freq, dur, type='sine', vol=0.15) {
   try {
@@ -377,22 +384,89 @@ function playGameOver() { [400,350,300,250].forEach((f,i) => setTimeout(()=>play
 function playClick() { playTone(600,0.05,'sine',0.08); }
 
 // ===== TEXT-TO-SPEECH =====
+let ttsReady = false;
+let cachedVoice = null;
+let ttsSupported = 'speechSynthesis' in window;
+
+// Warm up: pre-load voices eagerly
+function initVoices() {
+  if (!ttsSupported) return;
+  try {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      cachedVoice = voices.find(v => v.lang.startsWith('en') && /female|samantha|karen|zira/i.test(v.name))
+                 || voices.find(v => v.lang.startsWith('en-US'))
+                 || voices.find(v => v.lang.startsWith('en'));
+      ttsReady = true;
+    }
+  } catch(e) {}
+}
+if (ttsSupported) {
+  initVoices();
+  window.speechSynthesis.onvoiceschanged = initVoices;
+  // Also try on first user interaction (mobile often delays voice loading)
+  document.addEventListener('click', () => { if (!ttsReady) initVoices(); }, { once: true, passive: true });
+  document.addEventListener('touchstart', () => { if (!ttsReady) initVoices(); }, { once: true, passive: true });
+}
+
+let ttsFallbackShown = false;
+
 function speakWord(text, onEnd) {
+  // Always ensure AudioContext is active (helps on mobile)
+  ensureAudio();
+
+  if (!ttsSupported) {
+    showTTSFallback(text);
+    if (onEnd) onEnd();
+    return;
+  }
+
   try {
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'en-US'; u.rate = 0.8; u.pitch = 1.1;
-    // Try to pick an English voice
-    const voices = window.speechSynthesis.getVoices();
-    const enVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Female'))
-                 || voices.find(v => v.lang.startsWith('en'));
-    if (enVoice) u.voice = enVoice;
-    if (onEnd) u.onend = onEnd;
-    window.speechSynthesis.speak(u);
-  } catch(e) { if (onEnd) onEnd(); }
+
+    // iOS workaround: need a "warm-up" utterance before real speech
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (isIOS && !speakWord._warmed) {
+      const warm = new SpeechSynthesisUtterance(' ');
+      warm.volume = 0;
+      warm.onend = () => {
+        speakWord._warmed = true;
+        doSpeak(text, onEnd);
+      };
+      window.speechSynthesis.speak(warm);
+      return;
+    }
+
+    doSpeak(text, onEnd);
+  } catch(e) {
+    showTTSFallback(text);
+    if (onEnd) onEnd();
+  }
 }
-// Pre-load voices (some browsers load async)
-try { window.speechSynthesis.getVoices(); window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices(); } catch(e) {}
+speakWord._warmed = false;
+
+function doSpeak(text, onEnd) {
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US'; u.rate = 0.75; u.pitch = 1.1;
+  if (cachedVoice) u.voice = cachedVoice;
+  u.onend = () => { if (onEnd) onEnd(); };
+  u.onerror = () => { showTTSFallback(text); if (onEnd) onEnd(); };
+  window.speechSynthesis.speak(u);
+
+  // Safety timeout: if speech never fires onend (common on some Android), resolve after 3s
+  setTimeout(() => { if (onEnd) { onEnd = null; } }, 3000);
+}
+
+function showTTSFallback(text) {
+  // When TTS fails, briefly flash the English word so the player isn't stuck
+  const hint = document.getElementById('word-hint');
+  if (hint && !ttsFallbackShown) {
+    ttsFallbackShown = true;
+    const orig = hint.innerHTML;
+    hint.innerHTML = `<span style="color:#fdcb6e;font-weight:700;font-size:1.1em">📢 ${text}</span>`;
+    setTimeout(() => { hint.innerHTML = orig; ttsFallbackShown = false; }, 2000);
+  }
+}
 
 function isListenMode() { return LEVELS[gameState.currentLevel] && LEVELS[gameState.currentLevel].mode === 'listen'; }
 
