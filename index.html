@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+<title>单词星球大冒险</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --primary: #6c5ce7; --secondary: #a29bfe; --accent: #fd79a8;
+    --success: #00b894; --warning: #fdcb6e; --danger: #e17055;
+    --bg-gradient: linear-gradient(135deg, #0c0033 0%, #1a0066 30%, #2d1b69 60%, #0c0033 100%);
+  }
+  html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+  body { background: var(--bg-gradient); color: #fff; display: flex; justify-content: center; align-items: center; }
+
+  /* ===== Stars Background ===== */
+  .stars-container { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .star-bg { position: absolute; border-radius: 50%; background: #fff; animation: twinkle var(--dur) ease-in-out infinite alternate; }
+  @keyframes twinkle { 0% { opacity: 0.2; transform: scale(0.8); } 100% { opacity: 1; transform: scale(1.2); } }
+
+  /* ===== Screens ===== */
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s, transform 0.5s; z-index: 1; }
+  .screen.hidden { opacity: 0; pointer-events: none; transform: scale(0.95); }
+
+  /* ===== Start Screen ===== */
+  #start-screen .title { font-size: clamp(2rem, 8vw, 3.5rem); font-weight: 900; text-align: center; background: linear-gradient(135deg, #fd79a8, #fdcb6e, #6c5ce7, #00cec9); background-size: 300% 300%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: gradientShift 3s ease infinite; margin-bottom: 0.2em; line-height: 1.3; }
+  @keyframes gradientShift { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+  #start-screen .subtitle { font-size: clamp(0.9rem, 3vw, 1.2rem); color: #a29bfe; margin-bottom: 2em; text-align: center; }
+  .rocket { font-size: clamp(4rem, 15vw, 7rem); animation: rocketFloat 2s ease-in-out infinite; display: block; text-align: center; margin-bottom: 0.5em; filter: drop-shadow(0 0 20px rgba(253,121,168,0.5)); }
+  @keyframes rocketFloat { 0%,100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-20px) rotate(5deg); } }
+
+  .btn { border: none; border-radius: 50px; padding: 16px 48px; font-size: clamp(1rem, 4vw, 1.3rem); font-weight: 700; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden; letter-spacing: 1px; }
+  .btn-primary { background: linear-gradient(135deg, var(--accent), var(--primary)); color: #fff; box-shadow: 0 8px 25px rgba(108,92,231,0.4); }
+  .btn-primary:active { transform: scale(0.95); box-shadow: 0 4px 15px rgba(108,92,231,0.3); }
+  .btn-primary::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, transparent 30%, rgba(255,255,255,0.2) 50%, transparent 70%); transform: translateX(-100%); animation: btnShine 3s infinite; }
+  @keyframes btnShine { 0% { transform: translateX(-100%); } 30%,100% { transform: translateX(100%); } }
+
+  /* ===== Level Map ===== */
+  #level-screen { padding: 20px; overflow-y: auto; justify-content: flex-start; padding-top: max(env(safe-area-inset-top, 20px), 40px); }
+  .level-header { font-size: clamp(1.3rem, 5vw, 1.8rem); font-weight: 800; margin-bottom: 0.3em; text-align: center; }
+  .level-sub { font-size: clamp(0.8rem, 2.5vw, 1rem); color: #a29bfe; margin-bottom: 1.5em; text-align: center; }
+  .level-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 12px; width: 100%; max-width: 400px; padding-bottom: 40px; }
+  .level-node { aspect-ratio: 1; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 800; font-size: 1.4rem; cursor: pointer; transition: all 0.3s; position: relative; border: 2px solid transparent; }
+  .level-node.unlocked { background: linear-gradient(135deg, var(--primary), var(--secondary)); box-shadow: 0 4px 15px rgba(108,92,231,0.4); }
+  .level-node.unlocked:active { transform: scale(0.92); }
+  .level-node.locked { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.3); cursor: not-allowed; }
+  .level-node.locked::after { content: '\1F512'; font-size: 1rem; position: absolute; bottom: 4px; }
+  .level-node.cleared { background: linear-gradient(135deg, var(--success), #55efc4); box-shadow: 0 4px 15px rgba(0,184,148,0.4); }
+  .level-node .stars-display { font-size: 0.55rem; margin-top: 2px; letter-spacing: 1px; }
+  .back-btn { margin-top: 1.2em; margin-bottom: 1em; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 50px; padding: 10px 30px; font-size: 0.95rem; cursor: pointer; transition: all 0.3s; }
+  .back-btn:active { transform: scale(0.95); }
+
+  /* ===== Game Screen ===== */
+  #game-screen { padding: 15px; justify-content: flex-start; padding-top: max(env(safe-area-inset-top, 15px), 25px); }
+  .game-top-bar { width: 100%; max-width: 500px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .game-level-label { font-size: clamp(0.85rem, 3vw, 1.1rem); font-weight: 700; color: var(--warning); }
+  .hearts { display: flex; gap: 4px; font-size: clamp(1.1rem, 4vw, 1.5rem); }
+  .heart { transition: all 0.3s; filter: drop-shadow(0 0 4px rgba(253,121,168,0.5)); }
+  .heart.lost { filter: grayscale(1) opacity(0.3); transform: scale(0.8); }
+  .heart.breaking { animation: heartBreak 0.5s ease-out; }
+  @keyframes heartBreak { 0% { transform: scale(1); } 30% { transform: scale(1.3); } 100% { transform: scale(0.8); filter: grayscale(1) opacity(0.3); } }
+
+  .progress-bar-wrap { width: 100%; max-width: 500px; height: 10px; background: rgba(255,255,255,0.1); border-radius: 10px; margin-bottom: 15px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent), var(--warning)); border-radius: 10px; transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1); position: relative; }
+  .progress-bar-fill::after { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 20px; background: rgba(255,255,255,0.4); border-radius: 10px; filter: blur(4px); }
+
+  .game-card { width: 100%; max-width: 500px; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 0; }
+  .word-display { background: rgba(255,255,255,0.08); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.12); border-radius: 24px; padding: clamp(20px, 5vw, 35px); width: 100%; text-align: center; margin-bottom: clamp(15px, 4vw, 25px); position: relative; overflow: hidden; }
+  .word-display::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(108,92,231,0.1), rgba(253,121,168,0.1)); pointer-events: none; }
+  .word-emoji { font-size: clamp(3rem, 12vw, 5rem); display: block; margin-bottom: 0.3em; animation: emojiPop 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55); }
+  @keyframes emojiPop { 0% { transform: scale(0) rotate(-20deg); opacity: 0; } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
+  .word-chinese { font-size: clamp(1.2rem, 5vw, 1.8rem); font-weight: 700; color: #dfe6e9; }
+  .word-hint { font-size: clamp(0.75rem, 2.5vw, 0.9rem); color: rgba(255,255,255,0.4); margin-top: 0.5em; }
+  .letter-count { display: inline-flex; gap: 6px; margin-top: 0.7em; justify-content: center; }
+  .letter-slot { width: clamp(18px, 5vw, 26px); height: 4px; border-radius: 2px; background: rgba(255,255,255,0.2); }
+
+  .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(8px, 2.5vw, 12px); width: 100%; }
+  .option-btn { background: rgba(255,255,255,0.08); backdrop-filter: blur(5px); border: 2px solid rgba(255,255,255,0.15); border-radius: 16px; padding: clamp(12px, 3.5vw, 18px); font-size: clamp(1rem, 4vw, 1.3rem); font-weight: 700; color: #fff; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden; text-transform: lowercase; letter-spacing: 1px; }
+  .option-btn:active { transform: scale(0.95); }
+  .option-btn.correct { background: rgba(0,184,148,0.3); border-color: var(--success); animation: correctPulse 0.5s; box-shadow: 0 0 30px rgba(0,184,148,0.4); }
+  @keyframes correctPulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+  .option-btn.wrong { background: rgba(225,112,85,0.3); border-color: var(--danger); animation: wrongShake 0.5s; }
+  @keyframes wrongShake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-8px); } 40%,80% { transform: translateX(8px); } }
+  .option-btn.disabled { pointer-events: none; opacity: 0.5; }
+
+  .combo-display { position: fixed; top: 50%; right: 10px; transform: translateY(-50%); font-size: clamp(0.8rem, 2.5vw, 1rem); font-weight: 800; color: var(--warning); opacity: 0; transition: all 0.3s; z-index: 10; text-shadow: 0 0 10px rgba(253,203,110,0.5); }
+  .combo-display.show { opacity: 1; animation: comboIn 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55); }
+  @keyframes comboIn { 0% { transform: translateY(-50%) scale(0.5); } 100% { transform: translateY(-50%) scale(1); } }
+
+  /* ===== Result Screen ===== */
+  #result-screen { gap: 15px; }
+  .result-icon { font-size: clamp(4rem, 15vw, 7rem); animation: resultBounce 1s cubic-bezier(0.68, -0.55, 0.27, 1.55); }
+  @keyframes resultBounce { 0% { transform: scale(0) rotate(-10deg); } 60% { transform: scale(1.2) rotate(5deg); } 100% { transform: scale(1) rotate(0deg); } }
+  .result-title { font-size: clamp(1.5rem, 6vw, 2.2rem); font-weight: 900; text-align: center; }
+  .result-stars { font-size: clamp(2rem, 8vw, 3rem); letter-spacing: 8px; margin: 5px 0; }
+  .result-stats { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+  .stat-item { text-align: center; }
+  .stat-value { font-size: clamp(1.3rem, 5vw, 1.8rem); font-weight: 800; color: var(--warning); }
+  .stat-label { font-size: clamp(0.7rem, 2.5vw, 0.85rem); color: rgba(255,255,255,0.5); }
+  .result-buttons { display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
+  .btn-secondary { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); }
+
+  /* ===== Floating Text ===== */
+  .float-text { position: fixed; pointer-events: none; font-weight: 900; font-size: 1.5rem; z-index: 100; animation: floatUp 1s ease-out forwards; text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+  @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-80px) scale(1.3); } }
+
+  /* ===== Confetti ===== */
+  .confetti-piece { position: fixed; pointer-events: none; z-index: 99; animation: confettiFall var(--fall-dur) linear forwards; }
+  @keyframes confettiFall {
+    0% { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
+    100% { opacity: 0; transform: translateY(100vh) rotate(var(--rot)) scale(0.5); }
+  }
+
+  /* ===== Meteor ===== */
+  .meteor { position: fixed; pointer-events: none; z-index: 0; width: 3px; height: 80px; background: linear-gradient(to bottom, rgba(255,255,255,0.8), transparent); border-radius: 50%; animation: meteorFly 1.5s linear forwards; }
+  @keyframes meteorFly { 0% { opacity: 1; transform: translate(0, 0) rotate(-45deg); } 100% { opacity: 0; transform: translate(-300px, 300px) rotate(-45deg); } }
+
+  /* ===== Level Intro Overlay ===== */
+  .level-intro { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); animation: fadeIn 0.3s; }
+  .level-intro.hidden { display: none; }
+  .level-intro-num { font-size: clamp(3rem, 12vw, 5rem); font-weight: 900; background: linear-gradient(135deg, var(--warning), var(--accent)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: levelZoom 0.6s cubic-bezier(0.68, -0.55, 0.27, 1.55); }
+  .level-intro-name { font-size: clamp(1rem, 4vw, 1.4rem); color: #dfe6e9; margin-top: 10px; }
+  @keyframes levelZoom { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ===== Game Over Overlay ===== */
+  .game-over-overlay { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); animation: fadeIn 0.3s; gap: 15px; }
+  .game-over-overlay.hidden { display: none; }
+  .game-over-text { font-size: clamp(2rem, 8vw, 3rem); font-weight: 900; color: var(--danger); text-shadow: 0 0 30px rgba(225,112,85,0.5); }
+  .game-over-sub { color: rgba(255,255,255,0.6); font-size: clamp(0.85rem, 3vw, 1.1rem); }
+
+  /* ===== Listen Mode ===== */
+  .speaker-btn { width: clamp(90px, 25vw, 120px); height: clamp(90px, 25vw, 120px); border-radius: 50%; border: none; background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; font-size: clamp(2.5rem, 10vw, 4rem); cursor: pointer; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; transition: all 0.3s; box-shadow: 0 8px 30px rgba(108,92,231,0.5); position: relative; }
+  .speaker-btn:active { transform: scale(0.92); }
+  .speaker-btn.playing { animation: speakerPulse 0.8s ease-in-out; }
+  @keyframes speakerPulse { 0% { box-shadow: 0 0 0 0 rgba(108,92,231,0.6); } 50% { box-shadow: 0 0 0 20px rgba(108,92,231,0); } 100% { box-shadow: 0 0 0 0 rgba(108,92,231,0); } }
+  .speaker-btn::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid rgba(108,92,231,0.3); animation: speakerRing 2s ease-out infinite; }
+  @keyframes speakerRing { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.3); opacity: 0; } }
+  .listen-hint { font-size: clamp(0.8rem, 2.5vw, 0.95rem); color: rgba(255,255,255,0.5); margin-bottom: 5px; }
+  .listen-again { font-size: clamp(0.7rem, 2vw, 0.8rem); color: var(--secondary); margin-top: 8px; cursor: pointer; opacity: 0.7; }
+  .listen-again:active { opacity: 1; }
+  .mode-badge { font-size: 0.5rem; position: absolute; top: 3px; right: 3px; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 1px 4px; line-height: 1.2; }
+  .option-btn.listen-opt { font-size: clamp(1.05rem, 4vw, 1.35rem); padding: clamp(14px, 4vw, 20px); }
+  .option-btn.listen-opt .opt-emoji { margin-right: 6px; font-size: 1.1em; }
+
+  /* ===== Responsive ===== */
+  @media (max-height: 600px) {
+    .word-display { padding: 15px; }
+    .word-emoji { font-size: 2.5rem; margin-bottom: 0.2em; }
+    .option-btn { padding: 10px; }
+  }
+  @media (min-width: 768px) {
+    .options-grid { max-width: 450px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Stars background -->
+<div class="stars-container" id="stars-container"></div>
+
+<!-- Combo display -->
+<div class="combo-display" id="combo-display"></div>
+
+<!-- Start Screen -->
+<div class="screen" id="start-screen">
+  <span class="rocket">🚀</span>
+  <div class="title">单词星球<br>大冒险</div>
+  <div class="subtitle">和小火箭一起征服英文单词吧！</div>
+  <button class="btn btn-primary" onclick="showScreen('level-screen')">开始冒险</button>
+</div>
+
+<!-- Level Selection Screen -->
+<div class="screen hidden" id="level-screen">
+  <div class="level-header">🗺️ 选择关卡</div>
+  <div class="level-sub" id="total-stars-label">已收集 0 ⭐</div>
+  <div class="level-grid" id="level-grid"></div>
+  <button class="back-btn" onclick="showScreen('start-screen')">← 返回首页</button>
+</div>
+
+<!-- Game Screen -->
+<div class="screen hidden" id="game-screen">
+  <div class="game-top-bar">
+    <div class="game-level-label" id="game-level-label">第 1 关</div>
+    <div class="hearts" id="hearts"></div>
+  </div>
+  <div class="progress-bar-wrap">
+    <div class="progress-bar-fill" id="progress-fill" style="width:0%"></div>
+  </div>
+  <div class="game-card">
+    <div class="word-display" id="word-display">
+      <span class="word-emoji" id="word-emoji"></span>
+      <div class="word-chinese" id="word-chinese"></div>
+      <div class="word-hint" id="word-hint"></div>
+      <div class="letter-count" id="letter-count"></div>
+    </div>
+    <div class="options-grid" id="options-grid"></div>
+  </div>
+</div>
+
+<!-- Result Screen -->
+<div class="screen hidden" id="result-screen">
+  <div class="result-icon" id="result-icon"></div>
+  <div class="result-title" id="result-title"></div>
+  <div class="result-stars" id="result-stars"></div>
+  <div class="result-stats" id="result-stats"></div>
+  <div class="result-buttons" id="result-buttons"></div>
+</div>
+
+<!-- Level Intro Overlay -->
+<div class="level-intro hidden" id="level-intro">
+  <div class="level-intro-num" id="level-intro-num"></div>
+  <div class="level-intro-name" id="level-intro-name"></div>
+</div>
+
+<!-- Game Over Overlay -->
+<div class="game-over-overlay hidden" id="game-over">
+  <div class="game-over-text">💔 挑战失败</div>
+  <div class="game-over-sub">别灰心，再来一次！</div>
+  <div class="result-buttons">
+    <button class="btn btn-primary" onclick="retryLevel()">重新挑战</button>
+    <button class="btn btn-secondary" onclick="closeGameOver();showScreen('level-screen')">返回关卡</button>
+  </div>
+</div>
+
+<script>
+// ===== WORD DATA =====
+const LEVELS = [
+  { name: "动物乐园", icon: "🐾", words: [
+    { en: "cat", zh: "猫", emoji: "🐱" }, { en: "dog", zh: "狗", emoji: "🐶" },
+    { en: "fish", zh: "鱼", emoji: "🐟" }, { en: "bird", zh: "鸟", emoji: "🐦" },
+    { en: "pig", zh: "猪", emoji: "🐷" }, { en: "duck", zh: "鸭子", emoji: "🦆" },
+    { en: "hen", zh: "母鸡", emoji: "🐔" }
+  ]},
+  { name: "缤纷水果", icon: "🍎", words: [
+    { en: "apple", zh: "苹果", emoji: "🍎" }, { en: "banana", zh: "香蕉", emoji: "🍌" },
+    { en: "orange", zh: "橙子", emoji: "🍊" }, { en: "grape", zh: "葡萄", emoji: "🍇" },
+    { en: "pear", zh: "梨", emoji: "🍐" }, { en: "peach", zh: "桃子", emoji: "🍑" },
+    { en: "lemon", zh: "柠檬", emoji: "🍋" }
+  ]},
+  { name: "数字密码", icon: "🔢", words: [
+    { en: "one", zh: "一", emoji: "1️⃣" }, { en: "two", zh: "二", emoji: "2️⃣" },
+    { en: "three", zh: "三", emoji: "3️⃣" }, { en: "four", zh: "四", emoji: "4️⃣" },
+    { en: "five", zh: "五", emoji: "5️⃣" }, { en: "six", zh: "六", emoji: "6️⃣" },
+    { en: "ten", zh: "十", emoji: "🔟" }
+  ]},
+  { name: "家庭成员", icon: "👨‍👩‍👧‍👦", words: [
+    { en: "father", zh: "爸爸", emoji: "👨" }, { en: "mother", zh: "妈妈", emoji: "👩" },
+    { en: "brother", zh: "兄弟", emoji: "👦" }, { en: "sister", zh: "姐妹", emoji: "👧" },
+    { en: "baby", zh: "宝宝", emoji: "👶" }, { en: "grandpa", zh: "爷爷", emoji: "👴" },
+    { en: "grandma", zh: "奶奶", emoji: "👵" }
+  ]},
+  { name: "身体密码", icon: "🦵", words: [
+    { en: "head", zh: "头", emoji: "🗣️" }, { en: "eye", zh: "眼睛", emoji: "👁️" },
+    { en: "ear", zh: "耳朵", emoji: "👂" }, { en: "nose", zh: "鼻子", emoji: "👃" },
+    { en: "mouth", zh: "嘴巴", emoji: "👄" }, { en: "hand", zh: "手", emoji: "✋" },
+    { en: "foot", zh: "脚", emoji: "🦶" }
+  ]},
+  { name: "七彩世界", icon: "🌈", words: [
+    { en: "red", zh: "红色", emoji: "🔴" }, { en: "blue", zh: "蓝色", emoji: "🔵" },
+    { en: "green", zh: "绿色", emoji: "🟢" }, { en: "yellow", zh: "黄色", emoji: "🟡" },
+    { en: "white", zh: "白色", emoji: "⚪" }, { en: "black", zh: "黑色", emoji: "⚫" },
+    { en: "pink", zh: "粉色", emoji: "🩷" }
+  ]},
+  { name: "美味食物", icon: "🍔", words: [
+    { en: "rice", zh: "米饭", emoji: "🍚" }, { en: "bread", zh: "面包", emoji: "🍞" },
+    { en: "egg", zh: "鸡蛋", emoji: "🥚" }, { en: "milk", zh: "牛奶", emoji: "🥛" },
+    { en: "cake", zh: "蛋糕", emoji: "🎂" }, { en: "candy", zh: "糖果", emoji: "🍬" },
+    { en: "juice", zh: "果汁", emoji: "🧃" }
+  ]},
+  { name: "校园生活", icon: "🏫", words: [
+    { en: "book", zh: "书", emoji: "📖" }, { en: "pen", zh: "钢笔", emoji: "🖊️" },
+    { en: "desk", zh: "书桌", emoji: "🪑" }, { en: "bag", zh: "书包", emoji: "🎒" },
+    { en: "ruler", zh: "尺子", emoji: "📏" }, { en: "teacher", zh: "老师", emoji: "👩‍🏫" },
+    { en: "school", zh: "学校", emoji: "🏫" }
+  ]},
+  { name: "天气奥秘", icon: "⛅", words: [
+    { en: "sun", zh: "太阳", emoji: "☀️" }, { en: "rain", zh: "下雨", emoji: "🌧️" },
+    { en: "snow", zh: "下雪", emoji: "❄️" }, { en: "wind", zh: "风", emoji: "💨" },
+    { en: "cloud", zh: "云", emoji: "☁️" }, { en: "star", zh: "星星", emoji: "⭐" },
+    { en: "moon", zh: "月亮", emoji: "🌙" }
+  ]},
+  { name: "快乐行动", icon: "🏃", words: [
+    { en: "run", zh: "跑", emoji: "🏃" }, { en: "jump", zh: "跳", emoji: "🤸" },
+    { en: "swim", zh: "游泳", emoji: "🏊" }, { en: "sing", zh: "唱歌", emoji: "🎤" },
+    { en: "dance", zh: "跳舞", emoji: "💃" }, { en: "read", zh: "阅读", emoji: "📚" },
+    { en: "draw", zh: "画画", emoji: "🎨" }
+  ]},
+  { name: "服装穿搭", icon: "👗", mode: "listen", words: [
+    { en: "shirt", zh: "衬衫", emoji: "👔" }, { en: "dress", zh: "连衣裙", emoji: "👗" },
+    { en: "shoes", zh: "鞋子", emoji: "👟" }, { en: "hat", zh: "帽子", emoji: "🧢" },
+    { en: "coat", zh: "外套", emoji: "🧥" }, { en: "socks", zh: "袜子", emoji: "🧦" },
+    { en: "pants", zh: "裤子", emoji: "👖" }
+  ]},
+  { name: "交通工具", icon: "🚗", mode: "listen", words: [
+    { en: "car", zh: "汽车", emoji: "🚗" }, { en: "bus", zh: "公共汽车", emoji: "🚌" },
+    { en: "bike", zh: "自行车", emoji: "🚲" }, { en: "train", zh: "火车", emoji: "🚂" },
+    { en: "plane", zh: "飞机", emoji: "✈️" }, { en: "ship", zh: "轮船", emoji: "🚢" },
+    { en: "taxi", zh: "出租车", emoji: "🚕" }
+  ]},
+  { name: "大自然", icon: "🌿", mode: "listen", words: [
+    { en: "tree", zh: "树", emoji: "🌳" }, { en: "flower", zh: "花", emoji: "🌸" },
+    { en: "river", zh: "河流", emoji: "🏞️" }, { en: "mountain", zh: "山", emoji: "⛰️" },
+    { en: "grass", zh: "草", emoji: "🌿" }, { en: "lake", zh: "湖", emoji: "💧" },
+    { en: "forest", zh: "森林", emoji: "🌲" }
+  ]},
+  { name: "日常动作", icon: "🧹", mode: "listen", words: [
+    { en: "eat", zh: "吃", emoji: "🍽️" }, { en: "drink", zh: "喝", emoji: "🥤" },
+    { en: "sleep", zh: "睡觉", emoji: "😴" }, { en: "walk", zh: "走路", emoji: "🚶" },
+    { en: "play", zh: "玩", emoji: "🎮" }, { en: "wash", zh: "洗", emoji: "🧼" },
+    { en: "cook", zh: "做饭", emoji: "🍳" }
+  ]},
+  { name: "可爱动物", icon: "🐾", mode: "listen", words: [
+    { en: "rabbit", zh: "兔子", emoji: "🐰" }, { en: "monkey", zh: "猴子", emoji: "🐵" },
+    { en: "tiger", zh: "老虎", emoji: "🐯" }, { en: "panda", zh: "熊猫", emoji: "🐼" },
+    { en: "elephant", zh: "大象", emoji: "🐘" }, { en: "horse", zh: "马", emoji: "🐴" },
+    { en: "sheep", zh: "绵羊", emoji: "🐑" }
+  ]}
+];
+
+const WORDS_PER_LEVEL = 5;
+
+// ===== GAME STATE =====
+let gameState = {
+  unlockedLevel: 0,
+  levelStars: new Array(LEVELS.length).fill(0),
+  currentLevel: 0,
+  hearts: 3,
+  combo: 0,
+  maxCombo: 0,
+  correctCount: 0,
+  wrongCount: 0,
+  wordQueue: [],
+  currentWordIndex: 0,
+  totalWordsInLevel: 0,
+  answered: false
+};
+
+// Load saved progress
+try {
+  const saved = JSON.parse(localStorage.getItem('wordAdventure'));
+  if (saved) {
+    gameState.unlockedLevel = saved.u || 0;
+    gameState.levelStars = saved.s || gameState.levelStars;
+    // Pad stars array if new levels were added
+    while (gameState.levelStars.length < LEVELS.length) gameState.levelStars.push(0);
+  }
+} catch(e) {}
+
+function saveProgress() {
+  try { localStorage.setItem('wordAdventure', JSON.stringify({ u: gameState.unlockedLevel, s: gameState.levelStars })); } catch(e) {}
+}
+
+// ===== AUDIO ENGINE =====
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+function ensureAudio() { if (!audioCtx) audioCtx = new AudioCtx(); }
+
+function playTone(freq, dur, type='sine', vol=0.15) {
+  try {
+    ensureAudio();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + dur);
+  } catch(e) {}
+}
+
+function playCorrect() { playTone(523,0.1); setTimeout(()=>playTone(659,0.1),80); setTimeout(()=>playTone(784,0.15),160); }
+function playWrong() { playTone(200,0.15,'square',0.1); setTimeout(()=>playTone(180,0.2,'square',0.08),100); }
+function playCombo() { playTone(880,0.08); setTimeout(()=>playTone(1047,0.08),60); setTimeout(()=>playTone(1319,0.12),120); setTimeout(()=>playTone(1568,0.15),180); }
+function playLevelClear() { [523,587,659,698,784,880,988,1047].forEach((f,i) => setTimeout(()=>playTone(f,0.15,'sine',0.12),i*100)); }
+function playGameOver() { [400,350,300,250].forEach((f,i) => setTimeout(()=>playTone(f,0.3,'sawtooth',0.06),i*200)); }
+function playClick() { playTone(600,0.05,'sine',0.08); }
+
+// ===== TEXT-TO-SPEECH =====
+function speakWord(text, onEnd) {
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US'; u.rate = 0.8; u.pitch = 1.1;
+    // Try to pick an English voice
+    const voices = window.speechSynthesis.getVoices();
+    const enVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Female'))
+                 || voices.find(v => v.lang.startsWith('en'));
+    if (enVoice) u.voice = enVoice;
+    if (onEnd) u.onend = onEnd;
+    window.speechSynthesis.speak(u);
+  } catch(e) { if (onEnd) onEnd(); }
+}
+// Pre-load voices (some browsers load async)
+try { window.speechSynthesis.getVoices(); window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices(); } catch(e) {}
+
+function isListenMode() { return LEVELS[gameState.currentLevel] && LEVELS[gameState.currentLevel].mode === 'listen'; }
+
+// ===== STARS BACKGROUND =====
+function createStars() {
+  const c = document.getElementById('stars-container');
+  for (let i = 0; i < 60; i++) {
+    const s = document.createElement('div');
+    s.className = 'star-bg';
+    const size = Math.random() * 3 + 1;
+    s.style.cssText = `width:${size}px;height:${size}px;left:${Math.random()*100}%;top:${Math.random()*100}%;--dur:${Math.random()*3+2}s;animation-delay:${Math.random()*3}s;`;
+    c.appendChild(s);
+  }
+}
+
+// Occasional meteor
+function spawnMeteor() {
+  const m = document.createElement('div');
+  m.className = 'meteor';
+  m.style.cssText = `left:${Math.random()*80+20}%;top:${Math.random()*30}%;`;
+  document.body.appendChild(m);
+  setTimeout(() => m.remove(), 1500);
+}
+setInterval(() => { if (Math.random() < 0.3) spawnMeteor(); }, 4000);
+
+// ===== SCREEN MANAGEMENT =====
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+  if (id === 'level-screen') renderLevelGrid();
+  playClick();
+}
+
+// ===== LEVEL GRID =====
+function renderLevelGrid() {
+  const grid = document.getElementById('level-grid');
+  grid.innerHTML = '';
+  const totalStars = gameState.levelStars.reduce((a,b) => a+b, 0);
+  document.getElementById('total-stars-label').textContent = `已收集 ${totalStars} ⭐`;
+
+  LEVELS.forEach((lvl, i) => {
+    const node = document.createElement('div');
+    node.className = 'level-node';
+    const stars = gameState.levelStars[i];
+    if (i <= gameState.unlockedLevel) {
+      node.classList.add(stars > 0 ? 'cleared' : 'unlocked');
+      node.innerHTML = `<span>${lvl.icon}</span><span style="font-size:0.7rem">${i+1}</span>`;
+      if (lvl.mode === 'listen') node.innerHTML += '<span class="mode-badge">🎧</span>';
+      if (stars > 0) {
+        const starStr = '⭐'.repeat(stars) + '☆'.repeat(3-stars);
+        node.innerHTML += `<span class="stars-display">${starStr}</span>`;
+      }
+      node.onclick = () => startLevel(i);
+    } else {
+      node.classList.add('locked');
+      node.innerHTML = `<span style="opacity:0.3">${lvl.icon}</span><span style="font-size:0.7rem">${i+1}</span>`;
+    }
+    grid.appendChild(node);
+  });
+}
+
+// ===== START LEVEL =====
+function startLevel(levelIndex) {
+  playClick();
+  gameState.currentLevel = levelIndex;
+  gameState.hearts = 3;
+  gameState.combo = 0;
+  gameState.maxCombo = 0;
+  gameState.correctCount = 0;
+  gameState.wrongCount = 0;
+  gameState.answered = false;
+
+  // Pick random words
+  const allWords = [...LEVELS[levelIndex].words];
+  shuffle(allWords);
+  gameState.wordQueue = allWords.slice(0, WORDS_PER_LEVEL);
+  gameState.totalWordsInLevel = gameState.wordQueue.length;
+  gameState.currentWordIndex = 0;
+
+  // Show level intro
+  const intro = document.getElementById('level-intro');
+  document.getElementById('level-intro-num').textContent = `第 ${levelIndex+1} 关`;
+  const modeTag = LEVELS[levelIndex].mode === 'listen' ? ' 🎧 听力挑战' : '';
+  document.getElementById('level-intro-name').textContent = `${LEVELS[levelIndex].icon} ${LEVELS[levelIndex].name}${modeTag}`;
+  intro.classList.remove('hidden');
+
+  setTimeout(() => {
+    intro.classList.add('hidden');
+    showScreen('game-screen');
+    document.getElementById('game-level-label').textContent = `第 ${levelIndex+1} 关 · ${LEVELS[levelIndex].name}` + (LEVELS[levelIndex].mode === 'listen' ? ' 🎧' : '');
+    renderHearts();
+    showWord();
+  }, 1500);
+}
+
+// ===== RENDER HEARTS =====
+function renderHearts() {
+  const h = document.getElementById('hearts');
+  h.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    const span = document.createElement('span');
+    span.className = 'heart' + (i >= gameState.hearts ? ' lost' : '');
+    span.textContent = '❤️';
+    h.appendChild(span);
+  }
+}
+
+// ===== SHOW WORD =====
+function showWord() {
+  if (gameState.currentWordIndex >= gameState.totalWordsInLevel) {
+    levelComplete();
+    return;
+  }
+
+  gameState.answered = false;
+  const word = gameState.wordQueue[gameState.currentWordIndex];
+  const progress = (gameState.currentWordIndex / gameState.totalWordsInLevel) * 100;
+  document.getElementById('progress-fill').style.width = progress + '%';
+
+  // Animate card
+  const display = document.getElementById('word-display');
+  display.style.animation = 'none';
+  display.offsetHeight; // reflow
+  display.style.animation = 'fadeIn 0.3s';
+
+  if (isListenMode()) {
+    // ---- LISTEN MODE ----
+    document.getElementById('word-emoji').textContent = '';
+    document.getElementById('word-emoji').style.display = 'none';
+    document.getElementById('word-chinese').innerHTML =
+      '<button class="speaker-btn" id="speaker-btn" onclick="replaySpeaker()">🔊</button>';
+    document.getElementById('word-chinese').style.display = 'block';
+    document.getElementById('word-hint').innerHTML =
+      '<span class="listen-hint">🎧 听发音，选择正确的中文意思</span>' +
+      '<br><span class="listen-again" onclick="replaySpeaker()">🔁 再听一次</span>';
+    document.getElementById('letter-count').innerHTML = '';
+
+    // Auto-play after short delay
+    setTimeout(() => {
+      const btn = document.getElementById('speaker-btn');
+      if (btn) { btn.classList.add('playing'); setTimeout(() => btn.classList.remove('playing'), 800); }
+      speakWord(word.en);
+    }, 400);
+
+    generateListenOptions(word);
+  } else {
+    // ---- READING MODE (original) ----
+    document.getElementById('word-emoji').style.display = '';
+    document.getElementById('word-emoji').textContent = word.emoji;
+    document.getElementById('word-emoji').style.animation = 'none';
+    document.getElementById('word-emoji').offsetHeight;
+    document.getElementById('word-emoji').style.animation = 'emojiPop 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55)';
+    document.getElementById('word-chinese').style.display = '';
+    document.getElementById('word-chinese').textContent = word.zh;
+    document.getElementById('word-hint').textContent = `${word.en.length} 个字母`;
+
+    // Letter slots
+    const lc = document.getElementById('letter-count');
+    lc.innerHTML = '';
+    for (let i = 0; i < word.en.length; i++) {
+      const slot = document.createElement('span');
+      slot.className = 'letter-slot';
+      lc.appendChild(slot);
+    }
+
+    generateOptions(word);
+  }
+}
+
+function replaySpeaker() {
+  if (gameState.currentWordIndex < gameState.totalWordsInLevel) {
+    const word = gameState.wordQueue[gameState.currentWordIndex];
+    const btn = document.getElementById('speaker-btn');
+    if (btn) { btn.classList.add('playing'); setTimeout(() => btn.classList.remove('playing'), 800); }
+    speakWord(word.en);
+    playClick();
+  }
+}
+
+// ===== GENERATE OPTIONS =====
+function generateOptions(correctWord) {
+  const grid = document.getElementById('options-grid');
+  grid.innerHTML = '';
+
+  // Collect distractors from all levels
+  const allEn = [];
+  LEVELS.forEach(l => l.words.forEach(w => { if (w.en !== correctWord.en) allEn.push(w.en); }));
+  shuffle(allEn);
+
+  // Pick 3 unique distractors (different length preferred)
+  const distractors = [];
+  const used = new Set([correctWord.en]);
+  for (const w of allEn) {
+    if (!used.has(w)) { used.add(w); distractors.push(w); if (distractors.length === 3) break; }
+  }
+
+  const options = [correctWord.en, ...distractors];
+  shuffle(options);
+
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.textContent = opt;
+    btn.onclick = () => handleAnswer(btn, opt, correctWord.en);
+    grid.appendChild(btn);
+  });
+}
+
+// ===== GENERATE LISTEN OPTIONS =====
+function generateListenOptions(correctWord) {
+  const grid = document.getElementById('options-grid');
+  grid.innerHTML = '';
+
+  // Collect distractor Chinese meanings from all levels
+  const allZh = [];
+  LEVELS.forEach(l => l.words.forEach(w => {
+    if (w.en !== correctWord.en) allZh.push({ zh: w.zh, emoji: w.emoji, en: w.en });
+  }));
+  shuffle(allZh);
+
+  const distractors = [];
+  const used = new Set([correctWord.zh]);
+  for (const w of allZh) {
+    if (!used.has(w.zh)) { used.add(w.zh); distractors.push(w); if (distractors.length === 3) break; }
+  }
+
+  const options = [
+    { zh: correctWord.zh, emoji: correctWord.emoji, en: correctWord.en, correct: true },
+    ...distractors.map(d => ({ ...d, correct: false }))
+  ];
+  shuffle(options);
+
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn listen-opt';
+    btn.innerHTML = `<span class="opt-emoji">${opt.emoji}</span>${opt.zh}`;
+    btn.onclick = () => handleListenAnswer(btn, opt, correctWord);
+    grid.appendChild(btn);
+  });
+}
+
+// ===== HANDLE LISTEN ANSWER =====
+function handleListenAnswer(btn, selected, correctWord) {
+  if (gameState.answered) return;
+  gameState.answered = true;
+
+  const allBtns = document.querySelectorAll('.option-btn');
+  const isCorrect = selected.zh === correctWord.zh;
+
+  if (isCorrect) {
+    btn.classList.add('correct');
+    gameState.correctCount++;
+    gameState.combo++;
+    if (gameState.combo > gameState.maxCombo) gameState.maxCombo = gameState.combo;
+    playCorrect();
+
+    const bonus = gameState.combo >= 3;
+    showFloatText(btn, bonus ? `🔥 x${gameState.combo}` : '✨ +1', bonus ? '#fdcb6e' : '#00b894');
+    if (bonus) playCombo();
+
+    if (gameState.combo >= 2) {
+      const cd = document.getElementById('combo-display');
+      cd.textContent = `🔥 ${gameState.combo} 连击`;
+      cd.classList.add('show');
+    }
+
+    // Reveal the English word briefly
+    setTimeout(() => speakWord(correctWord.en), 200);
+
+    allBtns.forEach(b => { if (b !== btn) b.classList.add('disabled'); });
+    setTimeout(() => {
+      gameState.currentWordIndex++;
+      document.getElementById('combo-display').classList.remove('show');
+      showWord();
+    }, 900);
+
+  } else {
+    btn.classList.add('wrong');
+    gameState.wrongCount++;
+    gameState.combo = 0;
+    gameState.hearts--;
+    playWrong();
+
+    // Highlight correct answer
+    allBtns.forEach(b => {
+      if (b.innerHTML.includes(correctWord.zh)) b.classList.add('correct');
+      if (b !== btn) b.classList.add('disabled');
+    });
+
+    // Speak the correct word so they learn it
+    setTimeout(() => speakWord(correctWord.en), 300);
+
+    const hearts = document.querySelectorAll('.heart:not(.lost)');
+    if (hearts.length > 0) {
+      const last = hearts[hearts.length - 1];
+      last.classList.add('breaking');
+      setTimeout(() => { last.classList.remove('breaking'); last.classList.add('lost'); }, 500);
+    }
+
+    showFloatText(btn, '💔 -1', '#e17055');
+    document.getElementById('combo-display').classList.remove('show');
+
+    if (gameState.hearts <= 0) {
+      setTimeout(() => gameOver(), 1000);
+      return;
+    }
+
+    setTimeout(() => {
+      gameState.currentWordIndex++;
+      showWord();
+    }, 1200);
+  }
+}
+
+// ===== HANDLE ANSWER =====
+function handleAnswer(btn, selected, correct) {
+  if (gameState.answered) return;
+  gameState.answered = true;
+
+  const allBtns = document.querySelectorAll('.option-btn');
+
+  if (selected === correct) {
+    btn.classList.add('correct');
+    gameState.correctCount++;
+    gameState.combo++;
+    if (gameState.combo > gameState.maxCombo) gameState.maxCombo = gameState.combo;
+    playCorrect();
+
+    // Float text
+    const bonus = gameState.combo >= 3;
+    showFloatText(btn, bonus ? `🔥 x${gameState.combo}` : '✨ +1', bonus ? '#fdcb6e' : '#00b894');
+    if (bonus) playCombo();
+
+    // Update combo display
+    if (gameState.combo >= 2) {
+      const cd = document.getElementById('combo-display');
+      cd.textContent = `🔥 ${gameState.combo} 连击`;
+      cd.classList.add('show');
+    }
+
+    allBtns.forEach(b => { if (b !== btn) b.classList.add('disabled'); });
+
+    setTimeout(() => {
+      gameState.currentWordIndex++;
+      document.getElementById('combo-display').classList.remove('show');
+      showWord();
+    }, 800);
+
+  } else {
+    btn.classList.add('wrong');
+    gameState.wrongCount++;
+    gameState.combo = 0;
+    gameState.hearts--;
+    playWrong();
+
+    // Show correct answer
+    allBtns.forEach(b => {
+      if (b.textContent === correct) b.classList.add('correct');
+      if (b !== btn) b.classList.add('disabled');
+    });
+
+    // Heart breaking animation
+    const hearts = document.querySelectorAll('.heart:not(.lost)');
+    if (hearts.length > 0) {
+      const last = hearts[hearts.length - 1];
+      last.classList.add('breaking');
+      setTimeout(() => { last.classList.remove('breaking'); last.classList.add('lost'); }, 500);
+    }
+
+    showFloatText(btn, '💔 -1', '#e17055');
+
+    document.getElementById('combo-display').classList.remove('show');
+
+    if (gameState.hearts <= 0) {
+      setTimeout(() => gameOver(), 1000);
+      return;
+    }
+
+    setTimeout(() => {
+      gameState.currentWordIndex++;
+      showWord();
+    }, 1200);
+  }
+}
+
+// ===== LEVEL COMPLETE =====
+function levelComplete() {
+  document.getElementById('progress-fill').style.width = '100%';
+  playLevelClear();
+
+  const accuracy = gameState.correctCount / gameState.totalWordsInLevel;
+  const starsEarned = gameState.hearts === 3 ? 3 : gameState.hearts === 2 ? 2 : 1;
+
+  // Update state
+  if (starsEarned > gameState.levelStars[gameState.currentLevel]) {
+    gameState.levelStars[gameState.currentLevel] = starsEarned;
+  }
+  if (gameState.currentLevel >= gameState.unlockedLevel && gameState.currentLevel < LEVELS.length - 1) {
+    gameState.unlockedLevel = gameState.currentLevel + 1;
+  }
+  saveProgress();
+
+  // Spawn confetti
+  spawnConfetti(40);
+
+  setTimeout(() => {
+    showScreen('result-screen');
+    const isPerfect = gameState.hearts === 3;
+    document.getElementById('result-icon').textContent = isPerfect ? '🏆' : '🎉';
+    document.getElementById('result-title').textContent = isPerfect ? '完美通关！' : '恭喜过关！';
+    document.getElementById('result-stars').textContent = '⭐'.repeat(starsEarned) + '☆'.repeat(3 - starsEarned);
+
+    document.getElementById('result-stats').innerHTML = `
+      <div class="stat-item"><div class="stat-value">${gameState.correctCount}</div><div class="stat-label">正确</div></div>
+      <div class="stat-item"><div class="stat-value">${gameState.wrongCount}</div><div class="stat-label">错误</div></div>
+      <div class="stat-item"><div class="stat-value">${gameState.maxCombo}</div><div class="stat-label">最大连击</div></div>
+    `;
+
+    const btns = document.getElementById('result-buttons');
+    btns.innerHTML = '';
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'btn btn-secondary';
+    retryBtn.textContent = '🔄 再玩一次';
+    retryBtn.onclick = () => startLevel(gameState.currentLevel);
+    btns.appendChild(retryBtn);
+
+    if (gameState.currentLevel < LEVELS.length - 1) {
+      const nextBtn = document.createElement('button');
+      nextBtn.className = 'btn btn-primary';
+      nextBtn.textContent = '➡️ 下一关';
+      nextBtn.onclick = () => startLevel(gameState.currentLevel + 1);
+      btns.appendChild(nextBtn);
+    } else {
+      const allClear = document.createElement('div');
+      allClear.style.cssText = 'text-align:center;font-size:1.1rem;color:var(--warning);margin-top:10px;';
+      allClear.textContent = '🎊 恭喜你通关了所有关卡！';
+      btns.appendChild(allClear);
+    }
+  }, 600);
+}
+
+// ===== GAME OVER =====
+function gameOver() {
+  playGameOver();
+  document.getElementById('game-over').classList.remove('hidden');
+}
+
+function closeGameOver() {
+  document.getElementById('game-over').classList.add('hidden');
+}
+
+function retryLevel() {
+  closeGameOver();
+  startLevel(gameState.currentLevel);
+}
+
+// ===== EFFECTS =====
+function showFloatText(anchor, text, color) {
+  const el = document.createElement('div');
+  el.className = 'float-text';
+  el.textContent = text;
+  el.style.color = color;
+  const rect = anchor.getBoundingClientRect();
+  el.style.left = rect.left + rect.width / 2 - 30 + 'px';
+  el.style.top = rect.top - 10 + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+}
+
+function spawnConfetti(count) {
+  const colors = ['#fd79a8','#fdcb6e','#6c5ce7','#00b894','#e17055','#00cec9','#a29bfe','#55efc4'];
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    const size = Math.random() * 10 + 6;
+    const dur = Math.random() * 1.5 + 1.5;
+    const rot = Math.random() * 720 - 360;
+    const isCircle = Math.random() > 0.5;
+    el.style.cssText = `
+      left:${Math.random()*100}%;top:-10px;
+      width:${size}px;height:${isCircle ? size : size*2.5}px;
+      background:${colors[Math.floor(Math.random()*colors.length)]};
+      border-radius:${isCircle ? '50%' : '2px'};
+      --fall-dur:${dur}s;--rot:${rot}deg;
+      animation-delay:${Math.random()*0.5}s;
+    `;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), (dur + 0.5) * 1000);
+  }
+}
+
+// ===== UTILITIES =====
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// ===== INIT =====
+createStars();
+renderLevelGrid();
+</script>
+</body>
+</html>
