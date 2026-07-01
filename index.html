@@ -895,6 +895,20 @@ function shuffle(arr) {
 
 // ===== INIT =====
 createStars();
+
+// ===== DEBUG MODE =====
+function unlockAll() {
+  gameState.unlockedLevel = LEVELS.length - 1;
+  gameState.levelStars = gameState.levelStars.map(() => 3);
+  saveProgress();
+  renderLevelGrid();
+}
+if (location.search.includes('debug')) {
+  unlockAll();
+  console.log('🔓 已解锁全部关卡');
+}
+window.unlockAll = unlockAll;
+
 renderLevelGrid();
 </script>
 </body>
